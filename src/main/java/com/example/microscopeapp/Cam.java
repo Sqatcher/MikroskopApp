@@ -502,6 +502,8 @@ public class Cam extends Application
                     if (Math.abs(areaEdges[2] - areaEdges[0]) + Math.abs(areaEdges[3] - areaEdges[1]) < 20)
                     {
                         gc.strokeLine(areaEdges[2], areaEdges[3], areaEdges[0], areaEdges[1]);
+
+
                         double difX = areaEdges[2] - areaEdges[0];
                         double difY = areaEdges[3] - areaEdges[1];
                         areaBorderPoints[0][areaI] = areaEdges[0] + 1 * difX / 3;
@@ -547,6 +549,18 @@ public class Cam extends Application
                     {
                         gc.strokeLine(clickedXY[0], clickedXY[1], e.getX(), e.getY());
                         markShapeBuffer += (e.getX() - clickedXY[0]) * (e.getX() - clickedXY[0]) + (e.getY() - clickedXY[1]) * (e.getY() - clickedXY[1]);
+
+                        double difX = e.getX() - clickedXY[0];
+                        double difY = e.getY() - clickedXY[1];
+                        int pointNumber = 20;
+
+                        for (int i=0; i<pointNumber; i++)
+                        {
+                            areaBorderPoints[0][areaI] = clickedXY[0] + i * difX / pointNumber;
+                            areaBorderPoints[1][areaI] = clickedXY[1] + i * difY / pointNumber;
+                            areaI++;
+                        }
+
                         clickedXY[0] = e.getX();
                         clickedXY[1] = e.getY();
                         areaBorderPoints[0][areaI] = e.getX();
@@ -579,12 +593,28 @@ public class Cam extends Application
                     powerButtons[id].setChosenColor(cp.getValue());
                 }
             });
+
+            Button deleteShapeButton = new Button("Delete");
+
+            EventHandler<ActionEvent> deleteShapeHandler = new EventHandler<ActionEvent>() {
+                @Override
+                public void handle(ActionEvent actionEvent) {
+                    if (shapeCounter != 0)
+                    {
+                        deleteShape(shapeCounter-1);
+                    }
+                }
+            };
+            deleteShapeButton.setOnAction(deleteShapeHandler);
+
             AnchorPane layout = new AnchorPane();
             AnchorPane.setTopAnchor(colorsText, 20.0);
             AnchorPane.setTopAnchor(cp, 50.0);
+            AnchorPane.setTopAnchor(deleteShapeButton, 100.0);
             AnchorPane.setLeftAnchor(colorsText, 5.0);
             AnchorPane.setLeftAnchor(cp, 5.0);
-            layout.getChildren().addAll(colorsText, cp);
+            AnchorPane.setLeftAnchor(deleteShapeButton, 5.0);
+            layout.getChildren().addAll(colorsText, cp, deleteShapeButton);
 
 
             powerButtons[id].optionsWindow(layout, mainStage);
@@ -745,10 +775,10 @@ public class Cam extends Application
     {
         double[] extremes = new double[4]; // dół lewo góra prawo
 
-        extremes[0] = Arrays.stream(areaBorderPoints[1]).max().getAsDouble() + 1;
-        extremes[1] = Arrays.stream(areaBorderPoints[0]).min().getAsDouble() - 1;
-        extremes[2] = Arrays.stream(areaBorderPoints[1]).min().getAsDouble() - 1;
-        extremes[3] = Arrays.stream(areaBorderPoints[0]).max().getAsDouble() + 1;
+        extremes[0] = Arrays.stream(areaBorderPoints[1]).max().getAsDouble() + 2;
+        extremes[1] = Arrays.stream(areaBorderPoints[0]).min().getAsDouble() - 2;
+        extremes[2] = Arrays.stream(areaBorderPoints[1]).min().getAsDouble() - 2;
+        extremes[3] = Arrays.stream(areaBorderPoints[0]).max().getAsDouble() + 2;
 
         int img_width = (int) (extremes[3]) - (int)(extremes[1]);
         int img_height = (int) (extremes[0]) - (int)(extremes[2]);
@@ -759,7 +789,7 @@ public class Cam extends Application
         bufferArea = new byte[img_width * img_height * Integer.BYTES];
         //bufferArea = new byte[BUFFER_SIZE];
 
-        snapshotImage.getPixelReader().getPixels((int) extremes[1], (int) extremes[2], img_width, img_height, PixelFormat.getByteBgraInstance(), bufferArea, 0, img_width*4);
+        snapshotImage.getPixelReader().getPixels((int) extremes[1]+1, (int) extremes[2], img_width, img_height, PixelFormat.getByteBgraInstance(), bufferArea, 0, img_width*4);
 
         extremes[1] -= OFFSET_X;
         extremes[2] -= OFFSET_Y;
@@ -768,23 +798,97 @@ public class Cam extends Application
         int [][] shapeCoords = new int[2][img_width * img_height];
         int shapeNumber = 0;
 
+        int[][] mask = new int[img_width+1][img_height+1];
+
+        for (int i=0; i<areaI; i++)
+        {
+            mask[(int)(areaBorderPoints[0][i] - OFFSET_X-1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y) - (int) extremes[2]] = 1;
+
+            //left
+            if ((int)(areaBorderPoints[0][i] - OFFSET_X-2) - ((int) extremes[1]) >= 0)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X-2) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y) - (int) extremes[2]] = 1;
+            }
+            if ((int)(areaBorderPoints[0][i] - OFFSET_X-3) - ((int) extremes[1]) >= 0)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X-3) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y) - (int) extremes[2]] = 1;
+            }
+            //right
+            mask[(int)(areaBorderPoints[0][i] - OFFSET_X) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y) - (int) extremes[2]] = 1;
+            if ((int)(areaBorderPoints[0][i] - OFFSET_X+1) - ((int) extremes[1]) < img_width+1)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X+1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y) - (int) extremes[2]] = 1;
+            }
+
+            //up
+            if (((int)areaBorderPoints[1][i] - OFFSET_Y - 1) - (int) extremes[2] >= 0)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X-1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y - 1) - (int) extremes[2]] = 1;
+            }
+            if (((int)areaBorderPoints[1][i] - OFFSET_Y - 2) - (int) extremes[2] >= 0)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X-1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y - 2) - (int) extremes[2]] = 1;
+            }
+            //down
+            mask[(int)(areaBorderPoints[0][i] - OFFSET_X-1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y + 1) - (int) extremes[2]] = 1;
+            if (((int)areaBorderPoints[1][i] - OFFSET_Y + 2) - (int) extremes[2] < img_height+1)
+            {
+                mask[(int)(areaBorderPoints[0][i] - OFFSET_X-1) - ((int) extremes[1])][((int)areaBorderPoints[1][i] - OFFSET_Y + 2) - (int) extremes[2]] = 1;
+            }
+        }
+
+        //sufix sum
+        int[][] sufixSums = new int[img_width+2][img_height+1];
+        for (int j=img_height; j>=0; j--)
+        {
+            for (int i=img_width; i>0; i--)
+            {
+                sufixSums[i][j] = sufixSums[i+1][j] + mask[i][j];
+            }
+        }
+
+        boolean isInside = false;
         for (int j=0; j<img_height; j++)
         {
-            for (int i=0; i<img_width; i+=4)
+            for (int i=0; i<img_width; i++)
             {
                 int coord_x = (int) (extremes[1]+i);
                 int coord_y = (int) (extremes[2]+j);
-                int crosses = 0;
-
-                for (int h=0; h<areaBorderPoints[1].length; h++)
+                if (mask[i][j] == 1)
                 {
-                    if (Math.abs(areaBorderPoints[1][h] - coord_y) < 20)
+                    isInside = false;
+
+                    if (sufixSums[i+1][j] != 0)
                     {
-                        crosses++;
+                        isInside = !isInside;
+                    }
+                    else
+                    {
+                        isInside = false;
+                    }
+                }
+                else
+                {
+                    if (mask[i+1][j] == 1)
+                    {
+                        isInside = true;
+                    }
+                    else
+                    {
+                        if (i-1 >= 0 && mask[i-1][j] == 1)
+                        {
+                            shapeCoords[0][shapeNumber/4] = coord_x;
+                            shapeCoords[1][shapeNumber/4] = coord_y;
+                            shape[shapeNumber] = bufferArea[j*img_width*4 + i*4];
+                            shape[shapeNumber + 1] = bufferArea[j*img_width*4 + i*4 + 1];
+                            shape[shapeNumber + 2] = bufferArea[j*img_width*4 + i*4 + 2];
+                            shape[shapeNumber + 3] = bufferArea[j*img_width*4 + i*4 + 3];
+                            shapeNumber+=4;
+                        }
                     }
                 }
 
-                if (crosses%2 == 1)
+                if (isInside)
                 {
                     shapeCoords[0][shapeNumber/4] = coord_x;
                     shapeCoords[1][shapeNumber/4] = coord_y;
@@ -795,22 +899,41 @@ public class Cam extends Application
                     shapeNumber+=4;
                 }
             }
+            isInside = false;
         }
 
         shapeCollection[shapeCounter] = shape;
         shapeCollectionCoords[shapeCounter] = shapeCoords;
         shapeCounter++;
 
+    /*
         for (int i=0; i<shape.length; i+=4)
         {
             shape[i+3] = 127;
         }
+    */
 
         bufferPrevious = copyBytes(bufferCurrent);
         updateBufferWithShape(shapeCounter-1);
         //updateBufferCurrent(bufferArea, img_width, img_height, (int)extremes[1], (int)extremes[2]);
 
         refreshImage(bufferCurrent);
+    }
+
+    private void deleteShape(int index)
+    {
+        shapeCounter--;
+        byte[] shape = shapeCollection[index];
+        for (int i=0; i<shape.length; i+=4)
+        {
+            shape[i] = 0;
+            shape[i+1] = 0;
+            shape[i+2] = 0;
+            shape[i+3] = -1;
+        }
+        updateBufferWithShape(index);
+        refreshImage(bufferCurrent);
+        saveState();
     }
 
     private void updateBufferWithShape(int index)
